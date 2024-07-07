@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Performance Review Summary Generator</title>
+</head>
+<body>
+    <h1>Performance Review Summary Generator</h1>
+    <form action="/generate" method="POST">
+        <label for="username">GitHub Username:</label>
+        <input type="text" id="username" name="username" required>
+        <br>
+        <label for="repo">Repository Name:</label>
+        <input type="text" id="repo" name="repo" required>
+        <br>
+        <input type="submit" value="Generate Summary">
+    </form>
+</body>
+</html>
