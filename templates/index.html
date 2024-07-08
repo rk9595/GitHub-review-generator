@@ -1,18 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Performance Review Summary Generator</title>
+    <title>GitHub Contributions Report</title>
 </head>
 <body>
-    <h1>Performance Review Summary Generator</h1>
-    <form action="/generate" method="POST">
+    <h1>GitHub Contributions Report</h1>
+    <form action="/generatecsv" method="POST">
         <label for="username">GitHub Username:</label>
         <input type="text" id="username" name="username" required>
         <br>
-        <label for="repo">Repository Name:</label>
-        <input type="text" id="repo" name="repo" required>
+        <label for="duration_months">Duration (in months):</label>
+        <input type="number" id="duration_months" name="duration_months" value="4" required>
         <br>
-        <input type="submit" value="Generate Summary">
+        <label for="repo">Specific Repository (optional):</label>
+        <input type="text" id="repo" name="repo">
+        <br>
+        <input type="submit" value="Generate Report">
     </form>
 </body>
 </html>
