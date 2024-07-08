@@ -9,7 +9,7 @@ import csv
 import io
 import logging
 from app.schemas import ContributionsSchema
-
+import openai
 from app.swagger import spec, swaggerui_blueprint, SWAGGER_URL
 from app.utils import create_session, generate_intervals, get_pull_requests_for_repo, get_repositories
 
@@ -26,6 +26,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 GITHUB_ACCESS_TOKEN = os.getenv('GITHUB_TOKEN')
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 
 
@@ -110,6 +111,56 @@ def generate_csv():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/contribution-summary', methods=['POST'])
+def generate_contribution_summary():
+    schema = ContributionsSchema()
+    errors = schema.validate(request.form)
+    if errors:
+        return {'errors': errors}, 400
+
+    username = request.form['username']
+    duration_months = int(request.form['duration_months'])
+    specific_repo = request.form.get('repo')
+    intervals=generate_intervals(duration_months)
+    start_date, end_date = intervals[0]
+
+    try:
+        session = create_session(GITHUB_ACCESS_TOKEN)
+        repositories = get_repositories(username, session)
+        contribution_data=[]
+
+        for repo in repositories:
+            repo_name = repo['name']
+            if specific_repo and repo_name != specific_repo:
+                continue
+            pull_requests = get_pull_requests_for_repo(username, repo_name, session, start_date)
+            contribution_data.append({
+              pull_requests
+            })
+        summary= generate_summary(contribution_data)
+        return jsonify({'summary': summary})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def generate_summary(contribution_data):
+    prompt = f"Please summarize the following contributions:\n\n"
+    for pr in contribution_data:
+        prompt += f"- {pr['title']}: {pr['body']}\n"
+    prompt += "\nSummary:"
+
+    response = openai.Completion.create(
+        engine='text-davinci-003',
+        prompt=prompt,
+        max_tokens=100,
+        n=1,
+        stop=None,
+        temperature=0.7,
+    )
+
+    summary = response.choices[0].text.strip()
+    return summary
+    
 @app.route('/api/swagger.json')
 def swagger_spec():
     return jsonify(spec.to_dict())
