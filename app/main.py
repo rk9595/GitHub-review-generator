@@ -1,21 +1,32 @@
 # Description: This is the main file for the Flask application. It will be used to run the Flask application.
 from dotenv import load_dotenv
 import requests
-from flask import Flask, request, render_template, send_file, Response
+from flask import Flask, jsonify, request, render_template, send_file, Response
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import os
 import csv
 import io
+import logging
 from app.schemas import ContributionsSchema
-from app.utils import create_session, get_repositories, get_pull_requests_for_repo, generate_intervals
+
+from app.swagger import spec, swaggerui_blueprint, SWAGGER_URL
+from app.utils import create_session, generate_intervals, get_pull_requests_for_repo, get_repositories
 
 
 load_dotenv()
 
 app = Flask(__name__)
 
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+print(SWAGGER_URL)
+logger = logging.getLogger(__name__)
+
+logging.basicConfig(level=logging.INFO)
+
+
 GITHUB_ACCESS_TOKEN = os.getenv('GITHUB_TOKEN')
+
 
 
 
@@ -27,6 +38,7 @@ def generate_report(username, session, repositories, duration_months=6, specific
     start_date, end_date = intervals[0]
     interval_description = f"#Interval: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}\n"
 
+    logging.info(f"Generating report for {username} with duration of {duration_months} months")
     for repo in repositories:
         repo_name = repo['name']
         if specific_repo and repo_name != specific_repo:
@@ -55,6 +67,8 @@ def generate_report(username, session, repositories, duration_months=6, specific
 
     text_wrapper.flush()  # Ensure all data is written to the underlying BytesIO object
     csv_data.seek(0)
+    
+    logger.info(f"Generated report for {username} with duration of {duration_months} months")
     return csv_data.getvalue()
         
 
@@ -89,14 +103,16 @@ def generate_csv():
         if specific_repo:
             filename = f'{username}_{specific_repo}_github_contributions_report.csv'
 
-        # Create a Flask Response object that can send the correct CSV content
         response = Response(csv_content, mimetype='text/csv')
         response.headers.set('Content-Disposition', 'attachment', filename=filename)
         return response
 
     except Exception as e:
-        return {'error': str(e)}, 500
+        return jsonify({'error': str(e)}), 500
 
+@app.route('/api/swagger.json')
+def swagger_spec():
+    return jsonify(spec.to_dict())
 
 if __name__ == '__main__':
     app.run(debug=True)
