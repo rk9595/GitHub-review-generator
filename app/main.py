@@ -1,17 +1,22 @@
 # Description: This is the main file for the Flask application. It will be used to run the Flask application.
 from dotenv import load_dotenv
 import requests
-from flask import Flask, jsonify, request, render_template, send_file, Response
+from flask import Flask, json, jsonify, request, render_template, send_file, Response
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import os
 import csv
 import io
 import logging
+import json
+
+import requests_cache
 from app.schemas import ContributionsSchema
 import openai
 from app.swagger import spec, swaggerui_blueprint, SWAGGER_URL
 from app.utils import create_session, generate_intervals, get_pull_requests_for_repo, get_repositories
+import psycopg2
+import redis
 
 
 load_dotenv()
@@ -28,7 +33,31 @@ logging.basicConfig(level=logging.INFO)
 GITHUB_ACCESS_TOKEN = os.getenv('GITHUB_TOKEN')
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
+conn= psycopg2.connect(
+    host=os.getenv('DB_HOST'),
+    database=os.getenv('DB_NAME'),
+    user=os.getenv('DB_USER'),
+    password=os.getenv('DB_PASSWORD')
+)
 
+curr=conn.cursor()
+print("Connected to the database", curr)
+
+try:
+    curr.execute("SELECT 1")
+    print("Successfully connected to the database")
+except psycopg2.Error as e:
+    print("Failed to connect to the database")
+    print(e)
+    
+redis_client = redis.Redis(
+    host=os.getenv('REDIS_HOST'),
+    port=os.getenv('REDIS_PORT'),
+    password=os.getenv('REDIS_PASSWORD')
+)
+
+
+requests_cache.install_cache('github_cache', backend='redis', expire_after=1800, connection=redis_client)
 
 
 def generate_report(username, session, repositories, duration_months=6, specific_repo=None):
@@ -126,6 +155,20 @@ def generate_contribution_summary():
     start_date, end_date = intervals[0]
     interval_description = f"#Interval: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}\n"
     try:
+        #check if the contribution data is in the cache
+        cached_data= redis_client.get(username)
+        if cached_data:
+            return jsonify(cached_data)
+        
+        #Check if the contribution data is in the database
+        curr.execute("SELECT * FROM contributions WHERE username=%s", (username,))
+        result=curr.fetchone()
+        if result:
+            contribution_data=result[0]
+            #store the data in the cache
+            redis_client.set(username, json.dumps(contribution_data))
+            
+        #If the data is not in the cache or database, fetch the data from the GitHub APIs
         session = create_session(GITHUB_ACCESS_TOKEN)
         repositories = get_repositories(username, session)
         contribution_data={
@@ -162,7 +205,11 @@ def generate_contribution_summary():
                             # 'lines_added': pr['additions'],
                             # 'lines_deleted': pr['deletions']
                         })
-                    
+        #Store the contribution data in the database
+        curr.execute("INSERT INTO contributions (username, data) VALUES (%s, %s)", (username, json.dumps(contribution_data)))
+        conn.commit()
+        #Store the contribution data in the cache
+        redis_client.set(username, json.dumps(contribution_data))
         print (contribution_data)
         return jsonify(contribution_data)
         # summary= generate_summary(contribution_data)
