@@ -137,30 +137,36 @@ def generate_contribution_summary():
         
         }
         # print (contribution_data)
+        
+        batch_size = 10
 
         for repo in repositories:
             repo_name = repo['name']
             if specific_repo and repo_name != specific_repo:
                 continue
             pull_requests = get_pull_requests_for_repo(username, repo_name, session, start_date)
-            for pr in pull_requests:
-                # print (pr['additions'])
-                pr_merged_at = datetime.strptime(pr['merged_at'], '%Y-%m-%dT%H:%M:%SZ')
-                if start_date <= pr_merged_at <= end_date:
-                    contribution_data['merged_prs']+=1
-                    contribution_data['lines_added']+=pr.get('additions',0)
-                    # contribution_data['lines_deleted']+=pr['deletions',0]
-                    contribution_data['pr_details'].append({
-                        'title': pr['title'],
-                        'body': pr.get('body', 'No description provided'),
-                        # 'lines_added': pr['additions'],
-                        # 'lines_deleted': pr['deletions']
-                    })
+            for i in range(0, len(pull_requests), batch_size):
+                batch_size_pull_requests = pull_requests[i:i + batch_size]
+                print("Batch size: ", len(batch_size_pull_requests))
+                
+                for pr in batch_size_pull_requests:
+                    # print (pr['additions'])
+                    pr_merged_at = datetime.strptime(pr['merged_at'], '%Y-%m-%dT%H:%M:%SZ')
+                    if start_date <= pr_merged_at <= end_date:
+                        contribution_data['merged_prs']+=1
+                        contribution_data['lines_added']+=pr.get('additions',0)
+                        # contribution_data['lines_deleted']+=pr['deletions',0]
+                        contribution_data['pr_details'].append({
+                            'title': pr['title'],
+                            'body': pr.get('body', 'No description provided'),
+                            # 'lines_added': pr['additions'],
+                            # 'lines_deleted': pr['deletions']
+                        })
                     
         print (contribution_data)
-        # return jsonify(contribution_data)
-        summary= generate_summary(contribution_data)
-        print (summary)
+        return jsonify(contribution_data)
+        # summary= generate_summary(contribution_data)
+        # print (summary)
         
         # return jsonify({'summary': summary})
 

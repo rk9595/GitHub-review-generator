@@ -1,6 +1,8 @@
+# Description: This file contains utility functions for fetching data from the GitHub API.
 import requests
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import time
 
 def create_session(token):
     """Create a new HTTP session with the provided token."""
@@ -19,6 +21,13 @@ def fetch_all_pages(url, session):
                 url = response.links['next']['url']
             else:
                 break
+        elif response.status_code == 403:
+            print("API rate limit exceeded. Please wait for a minute and try again.")
+            time.sleep(60)
+            continue
+        elif response.status_code == 404:
+            print("Failed to fetch data:User not found.")
+            break
         else:
             print(f"Failed to fetch data: {response.status_code}")
             break
