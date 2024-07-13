@@ -98,8 +98,9 @@ def generate_csv():
     try:
         session = create_session(GITHUB_ACCESS_TOKEN)
         repositories = get_repositories(username, session)
+        # print (repositories)
         csv_content = generate_report(username, session, repositories, duration_months, specific_repo)
-
+        print (csv_content)
         filename = f'{username}_github_contributions_report.csv'
         if specific_repo:
             filename = f'{username}_{specific_repo}_github_contributions_report.csv'
@@ -123,31 +124,58 @@ def generate_contribution_summary():
     specific_repo = request.form.get('repo')
     intervals=generate_intervals(duration_months)
     start_date, end_date = intervals[0]
-
+    interval_description = f"#Interval: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}\n"
     try:
         session = create_session(GITHUB_ACCESS_TOKEN)
         repositories = get_repositories(username, session)
-        contribution_data=[]
+        contribution_data={
+            'total_prs':0,           
+            'merged_prs':0,
+            'lines_added':0,
+            'lines_deleted':0,
+            'pr_details':[]
+        
+        }
+        # print (contribution_data)
 
         for repo in repositories:
             repo_name = repo['name']
             if specific_repo and repo_name != specific_repo:
                 continue
             pull_requests = get_pull_requests_for_repo(username, repo_name, session, start_date)
-            contribution_data.append({
-              pull_requests
-            })
+            for pr in pull_requests:
+                # print (pr['additions'])
+                pr_merged_at = datetime.strptime(pr['merged_at'], '%Y-%m-%dT%H:%M:%SZ')
+                if start_date <= pr_merged_at <= end_date:
+                    contribution_data['merged_prs']+=1
+                    contribution_data['lines_added']+=pr.get('additions',0)
+                    # contribution_data['lines_deleted']+=pr['deletions',0]
+                    contribution_data['pr_details'].append({
+                        'title': pr['title'],
+                        'body': pr.get('body', 'No description provided'),
+                        # 'lines_added': pr['additions'],
+                        # 'lines_deleted': pr['deletions']
+                    })
+                    
+        print (contribution_data)
+        # return jsonify(contribution_data)
         summary= generate_summary(contribution_data)
-        return jsonify({'summary': summary})
+        print (summary)
+        
+        # return jsonify({'summary': summary})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
 
 def generate_summary(contribution_data):
-    prompt = f"Please summarize the following contributions:\n\n"
-    for pr in contribution_data:
-        prompt += f"- {pr['title']}: {pr['body']}\n"
-    prompt += "\nSummary:"
+    prompt = f"Please summarize the following contributions for a software developer:\n\n"
+    prompt+=f"PR Details: \n"
+    for pr in contribution_data['pr_details']:
+        prompt+=f"Title: {pr['title']}\n"
+        prompt+=f"Description: {pr['body']}\n"
+    prompt+="Summary"
+      
 
     response = openai.Completion.create(
         engine='text-davinci-003',
