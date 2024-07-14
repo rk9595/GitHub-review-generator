@@ -9,7 +9,7 @@ import csv
 import io
 import logging
 import json
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+# from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import requests_cache
 from app.schemas import ContributionsSchema
 import openai
