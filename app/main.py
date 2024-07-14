@@ -55,10 +55,10 @@ redis_client = redis.Redis(
     port=os.getenv('REDIS_PORT'),
     password=os.getenv('REDIS_PASSWORD')
 )
-model_path = "lama"
-tokenizer = AutoTokenizer.from_pretrained(model_path)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
-print("Model loaded successfully", model)
+# model_path = "lama"
+# tokenizer = AutoTokenizer.from_pretrained(model_path)
+# model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
+# print("Model loaded successfully", model)
 
 requests_cache.install_cache('github_cache', backend='redis', expire_after=1800, connection=redis_client)
 
