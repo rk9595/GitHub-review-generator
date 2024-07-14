@@ -158,7 +158,8 @@ def generate_contribution_summary():
         #check if the contribution data is in the cache
         cached_data= redis_client.get(username)
         if cached_data:
-            return jsonify(cached_data)
+            cached_data_json=json.loads(cached_data.decode('utf-8'))
+            return jsonify(cached_data_json)
         
         #Check if the contribution data is in the database
         curr.execute("SELECT * FROM contributions WHERE username=%s", (username,))
