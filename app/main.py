@@ -9,7 +9,7 @@ import csv
 import io
 import logging
 import json
-
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import requests_cache
 from app.schemas import ContributionsSchema
 import openai
@@ -24,7 +24,7 @@ load_dotenv()
 app = Flask(__name__)
 
 app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
-print(SWAGGER_URL)
+# print(SWAGGER_URL)
 logger = logging.getLogger(__name__)
 
 logging.basicConfig(level=logging.INFO)
@@ -55,7 +55,10 @@ redis_client = redis.Redis(
     port=os.getenv('REDIS_PORT'),
     password=os.getenv('REDIS_PASSWORD')
 )
-
+model_path = "lama"
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
+print("Model loaded successfully", model)
 
 requests_cache.install_cache('github_cache', backend='redis', expire_after=1800, connection=redis_client)
 
@@ -159,7 +162,9 @@ def generate_contribution_summary():
         cached_data= redis_client.get(username)
         if cached_data:
             cached_data_json=json.loads(cached_data.decode('utf-8'))
-            return jsonify(cached_data_json)
+            summary= generate_summary(cached_data_json)
+            print ("cachedsummary",summary)
+            return jsonify({'summary': summary})
         
         #Check if the contribution data is in the database
         curr.execute("SELECT * FROM contributions WHERE username=%s", (username,))
@@ -211,37 +216,36 @@ def generate_contribution_summary():
         conn.commit()
         #Store the contribution data in the cache
         redis_client.set(username, json.dumps(contribution_data))
-        print (contribution_data)
-        return jsonify(contribution_data)
-        # summary= generate_summary(contribution_data)
-        # print (summary)
+        # print (contribution_data)
+        # return jsonify(contribution_data)
+        summary= generate_summary(contribution_data)
+        print ("summary",summary)
+        # return "Summary generated successfully"
         
-        # return jsonify({'summary': summary})
+        return jsonify({'summary': summary})
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
+    
+
 
 def generate_summary(contribution_data):
     prompt = f"Please summarize the following contributions for a software developer:\n\n"
-    prompt+=f"PR Details: \n"
+    prompt += f"PR Details: \n"
     for pr in contribution_data['pr_details']:
-        prompt+=f"Title: {pr['title']}\n"
-        prompt+=f"Description: {pr['body']}\n"
-    prompt+="Summary"
+        prompt += f"Title: {pr['title']}\n"
+        prompt += f"Description: {pr['body']}\n"
+    prompt += "Summary:"
+
+    inputs = tokenizer(prompt, return_tensors="pt", max_length=1024, truncation=True)
+    summary_ids = model.generate(inputs["input_ids"], num_beams=4, max_length=100, early_stopping=True)
+    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
+    return summary
       
 
-    response = openai.Completion.create(
-        engine='text-davinci-003',
-        prompt=prompt,
-        max_tokens=100,
-        n=1,
-        stop=None,
-        temperature=0.7,
-    )
-
-    summary = response.choices[0].text.strip()
-    return summary
+    
     
 @app.route('/api/swagger.json')
 def swagger_spec():
