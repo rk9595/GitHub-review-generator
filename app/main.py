@@ -144,105 +144,108 @@ def generate_csv():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/contribution-summary', methods=['POST'])
-def generate_contribution_summary():
-    schema = ContributionsSchema()
-    errors = schema.validate(request.form)
-    if errors:
-        return {'errors': errors}, 400
 
-    username = request.form['username']
-    duration_months = int(request.form['duration_months'])
-    specific_repo = request.form.get('repo')
-    intervals=generate_intervals(duration_months)
-    start_date, end_date = intervals[0]
-    interval_description = f"#Interval: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}\n"
-    try:
-        #check if the contribution data is in the cache
-        cached_data= redis_client.get(username)
-        if cached_data:
-            cached_data_json=json.loads(cached_data.decode('utf-8'))
-            summary= generate_summary(cached_data_json)
-            print ("cachedsummary",summary)
-            return jsonify({'summary': summary})
+
+# Description: This endpoint generates a summary of the contributions for a given user using LLM.
+# @app.route('/api/contribution-summary', methods=['POST'])
+# def generate_contribution_summary():
+#     schema = ContributionsSchema()
+#     errors = schema.validate(request.form)
+#     if errors:
+#         return {'errors': errors}, 400
+
+#     username = request.form['username']
+#     duration_months = int(request.form['duration_months'])
+#     specific_repo = request.form.get('repo')
+#     intervals=generate_intervals(duration_months)
+#     start_date, end_date = intervals[0]
+#     interval_description = f"#Interval: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}\n"
+#     try:
+#         #check if the contribution data is in the cache
+#         cached_data= redis_client.get(username)
+#         if cached_data:
+#             cached_data_json=json.loads(cached_data.decode('utf-8'))
+#             summary= generate_summary(cached_data_json)
+#             print ("cachedsummary",summary)
+#             return jsonify({'summary': summary})
         
-        #Check if the contribution data is in the database
-        curr.execute("SELECT * FROM contributions WHERE username=%s", (username,))
-        result=curr.fetchone()
-        if result:
-            contribution_data=result[0]
-            #store the data in the cache
-            redis_client.set(username, json.dumps(contribution_data))
+#         #Check if the contribution data is in the database
+#         curr.execute("SELECT * FROM contributions WHERE username=%s", (username,))
+#         result=curr.fetchone()
+#         if result:
+#             contribution_data=result[0]
+#             #store the data in the cache
+#             redis_client.set(username, json.dumps(contribution_data))
             
-        #If the data is not in the cache or database, fetch the data from the GitHub APIs
-        session = create_session(GITHUB_ACCESS_TOKEN)
-        repositories = get_repositories(username, session)
-        contribution_data={
-            'total_prs':0,           
-            'merged_prs':0,
-            'lines_added':0,
-            'lines_deleted':0,
-            'pr_details':[]
+#         #If the data is not in the cache or database, fetch the data from the GitHub APIs
+#         session = create_session(GITHUB_ACCESS_TOKEN)
+#         repositories = get_repositories(username, session)
+#         contribution_data={
+#             'total_prs':0,           
+#             'merged_prs':0,
+#             'lines_added':0,
+#             'lines_deleted':0,
+#             'pr_details':[]
         
-        }
-        # print (contribution_data)
+#         }
+#         # print (contribution_data)
         
-        batch_size = 10
+#         batch_size = 10
 
-        for repo in repositories:
-            repo_name = repo['name']
-            if specific_repo and repo_name != specific_repo:
-                continue
-            pull_requests = get_pull_requests_for_repo(username, repo_name, session, start_date)
-            for i in range(0, len(pull_requests), batch_size):
-                batch_size_pull_requests = pull_requests[i:i + batch_size]
-                print("Batch size: ", len(batch_size_pull_requests))
+#         for repo in repositories:
+#             repo_name = repo['name']
+#             if specific_repo and repo_name != specific_repo:
+#                 continue
+#             pull_requests = get_pull_requests_for_repo(username, repo_name, session, start_date)
+#             for i in range(0, len(pull_requests), batch_size):
+#                 batch_size_pull_requests = pull_requests[i:i + batch_size]
+#                 print("Batch size: ", len(batch_size_pull_requests))
                 
-                for pr in batch_size_pull_requests:
-                    # print (pr['additions'])
-                    pr_merged_at = datetime.strptime(pr['merged_at'], '%Y-%m-%dT%H:%M:%SZ')
-                    if start_date <= pr_merged_at <= end_date:
-                        contribution_data['merged_prs']+=1
-                        contribution_data['lines_added']+=pr.get('additions',0)
-                        # contribution_data['lines_deleted']+=pr['deletions',0]
-                        contribution_data['pr_details'].append({
-                            'title': pr['title'],
-                            'body': pr.get('body', 'No description provided'),
-                            # 'lines_added': pr['additions'],
-                            # 'lines_deleted': pr['deletions']
-                        })
-        #Store the contribution data in the database
-        curr.execute("INSERT INTO contributions (username, data) VALUES (%s, %s)", (username, json.dumps(contribution_data)))
-        conn.commit()
-        #Store the contribution data in the cache
-        redis_client.set(username, json.dumps(contribution_data))
-        # print (contribution_data)
-        # return jsonify(contribution_data)
-        summary= generate_summary(contribution_data)
-        print ("summary",summary)
-        # return "Summary generated successfully"
+#                 for pr in batch_size_pull_requests:
+#                     # print (pr['additions'])
+#                     pr_merged_at = datetime.strptime(pr['merged_at'], '%Y-%m-%dT%H:%M:%SZ')
+#                     if start_date <= pr_merged_at <= end_date:
+#                         contribution_data['merged_prs']+=1
+#                         contribution_data['lines_added']+=pr.get('additions',0)
+#                         # contribution_data['lines_deleted']+=pr['deletions',0]
+#                         contribution_data['pr_details'].append({
+#                             'title': pr['title'],
+#                             'body': pr.get('body', 'No description provided'),
+#                             # 'lines_added': pr['additions'],
+#                             # 'lines_deleted': pr['deletions']
+#                         })
+#         #Store the contribution data in the database
+#         curr.execute("INSERT INTO contributions (username, data) VALUES (%s, %s)", (username, json.dumps(contribution_data)))
+#         conn.commit()
+#         #Store the contribution data in the cache
+#         redis_client.set(username, json.dumps(contribution_data))
+#         # print (contribution_data)
+#         # return jsonify(contribution_data)
+#         summary= generate_summary(contribution_data)
+#         print ("summary",summary)
+#         # return "Summary generated successfully"
         
-        return jsonify({'summary': summary})
+#         return jsonify({'summary': summary})
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 500
     
     
 
 
-def generate_summary(contribution_data):
-    prompt = f"Please summarize the following contributions for a software developer:\n\n"
-    prompt += f"PR Details: \n"
-    for pr in contribution_data['pr_details']:
-        prompt += f"Title: {pr['title']}\n"
-        prompt += f"Description: {pr['body']}\n"
-    prompt += "Summary:"
+# def generate_summary(contribution_data):
+#     prompt = f"Please summarize the following contributions for a software developer:\n\n"
+#     prompt += f"PR Details: \n"
+#     for pr in contribution_data['pr_details']:
+#         prompt += f"Title: {pr['title']}\n"
+#         prompt += f"Description: {pr['body']}\n"
+#     prompt += "Summary:"
 
-    inputs = tokenizer(prompt, return_tensors="pt", max_length=1024, truncation=True)
-    summary_ids = model.generate(inputs["input_ids"], num_beams=4, max_length=100, early_stopping=True)
-    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+#     inputs = tokenizer(prompt, return_tensors="pt", max_length=1024, truncation=True)
+#     summary_ids = model.generate(inputs["input_ids"], num_beams=4, max_length=100, early_stopping=True)
+#     summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
-    return summary
+#     return summary
       
 
     
